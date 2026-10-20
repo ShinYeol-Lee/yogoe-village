@@ -1,1 +1,7 @@
-# yogoe-village
+# 요괴 마을
+
+낮에는 마을을 키우고, 밤에는 내 마을이 요괴를 막아내는 걸 구경하는 게임.
+
+- 실행: 저장소 루트를 정적 서버로 열고 `index.html` 접속 (예: `python3 -m http.server`)
+- 디버그: 주소 뒤에 `?debug=1`
+- 기획·작업 규칙: `CLAUDE.md`
