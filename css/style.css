@@ -75,6 +75,7 @@ html, body {
   pointer-events: none;
   animation: bannerIn 0.4s ease-out;
 }
+#banner.skill { background: rgba(230, 160, 20, 0.85); }
 @keyframes bannerIn { from { transform: scale(1.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 #panel { padding: 8px 8px 10px; background: #e8dcc2; }
@@ -108,6 +109,11 @@ button small { font-weight: 500; font-size: 12px; }
 .night { background: var(--night); color: #fff; font-size: 17px; }
 .speed { background: #fff3d6; }
 .skip { background: #ffe0d0; }
+.skills { flex-wrap: wrap; }
+.skill { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #ffd23f; font-size: 15px; padding: 4px 6px; min-width: 30%; }
+.skill small { font-size: 11px; font-weight: 500; }
+.skill:not(:disabled) { animation: glow 1.2s ease-in-out infinite alternate; }
+@keyframes glow { from { box-shadow: 0 0 0 rgba(255,210,63,0.9); } to { box-shadow: 0 0 14px rgba(255,210,63,0.9); } }
 .debug button { min-height: 44px; font-size: 12px; background: #ddd; }
 
 #overlay {

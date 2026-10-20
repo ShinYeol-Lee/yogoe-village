@@ -40,15 +40,27 @@ function goNight() {
   nightPanel();
 }
 
+// 패널을 다시 그려야 하는지 판단할 필살기 상태 표시
+const skillSig = N => N.units.map(u => (u.skillReady ? 1 : 0) + (u.down ? 2 : 0)).join('');
+let lastSkillSig = '';
+
 function nightPanel() {
   const N = night.N;
+  lastSkillSig = skillSig(N);
+  const skills = N.units.filter(u => u.general).map((u, i) => {
+    const G = D.GENERALS[u.general.type];
+    return `<button class="skill" data-act="skill:${N.units.indexOf(u)}" ${u.skillReady && !u.down ? '' : 'disabled'}>
+      ${G.emoji} ${G.skill.name}<small>${u.skillReady ? G.skill.desc : '사용함'}</small></button>`;
+  }).join('');
   setPanel(`
+    ${skills ? `<div class="row skills">${skills}</div>` : ''}
     <div class="row">
       <button data-act="speed" class="speed">${N.speed === 1 ? '▶▶ 2배속' : '▶ 1배속'}</button>
       <button data-act="skip" class="skip">⏭ 건너뛰기</button>
     </div>`, act => {
     if (act === 'speed') { N.speed = N.speed === 1 ? 2 : 1; nightPanel(); }
     if (act === 'skip') night.skip();
+    if (act.startsWith('skill:')) { night.useSkill(N.units[+act.slice(6)]); nightPanel(); }
   });
 }
 
@@ -137,8 +149,16 @@ function frame(now) {
         showBanner(N.bossBanner, D.FX.bossBannerTime);
         N.bossBanner = null;
       }
+      if (N.skillBanner) { // 장군 필살기
+        showBanner(N.skillBanner, 1.2, 'skill');
+        N.skillBanner = null;
+      }
       infoTimer -= dt;
-      if (infoTimer <= 0) { nightInfo(); infoTimer = 0.1; }
+      if (infoTimer <= 0) {
+        nightInfo();
+        if (skillSig(N) !== lastSkillSig) nightPanel(); // 자동 발동·쓰러짐 반영
+        infoTimer = 0.1;
+      }
     }
     drawNight(night.N);
   } else if (state) {

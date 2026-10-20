@@ -47,6 +47,7 @@ export function roleOf(r) {
   const b = buildingAt(r.x, r.y);
   if (b === 'field') return 'farmer';
   if (b === 'lumber') return 'lumber';
+  if (b === 'tower') return 'archer';
   return 'guard';
 }
 

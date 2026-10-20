@@ -120,21 +120,50 @@ function outline(x, y, color) {
   ctx.strokeRect(sx(x) + 2, sy(y) + 2, cs - 4, cs - 4);
 }
 
+// 돌담·망루가 붙어 있으면 이어진 성벽으로 그린다
+function isFort(x, y, walls) {
+  if (x < 0 || y < 0 || x >= D.GRID_W || y >= D.GRID_H) return false;
+  const b = state.grid[idx(x, y)];
+  if (b === 'tower') return true;
+  return b === 'wall' && (!walls || !!walls[idx(x, y)]);
+}
+
+function drawWall(x, y, night, walls) {
+  const m = cs * 0.16, X = sx(x), Y = sy(y);
+  ctx.fillStyle = night ? '#7d766c' : '#a39886';
+  ctx.fillRect(X + m, Y + m, cs - m * 2, cs - m * 2);
+  if (isFort(x - 1, y, walls)) ctx.fillRect(X, Y + m, m, cs - m * 2);
+  if (isFort(x + 1, y, walls)) ctx.fillRect(X + cs - m, Y + m, m, cs - m * 2);
+  if (isFort(x, y - 1, walls)) ctx.fillRect(X + m, Y, cs - m * 2, m);
+  if (isFort(x, y + 1, walls)) ctx.fillRect(X + m, Y + cs - m, cs - m * 2, m);
+  // 돌 줄눈과 위쪽 성가퀴
+  ctx.strokeStyle = night ? '#4f4a43' : '#6e6556';
+  ctx.lineWidth = Math.max(1, cs * 0.03);
+  ctx.beginPath();
+  ctx.moveTo(X + m, Y + cs / 2); ctx.lineTo(X + cs - m, Y + cs / 2);
+  ctx.moveTo(X + cs / 2, Y + m); ctx.lineTo(X + cs / 2, Y + cs / 2);
+  ctx.moveTo(X + cs * 0.33, Y + cs / 2); ctx.lineTo(X + cs * 0.33, Y + cs - m);
+  ctx.moveTo(X + cs * 0.67, Y + cs / 2); ctx.lineTo(X + cs * 0.67, Y + cs - m);
+  ctx.stroke();
+  ctx.fillStyle = night ? '#958c80' : '#c2b6a2';
+  const t = cs * 0.12;
+  for (let i = 0; i < 3; i++) ctx.fillRect(X + m + i * (cs - m * 2 - t) / 2, Y + m - t * 0.6, t, t * 0.6);
+}
+
 function drawBuildings(night, walls) {
   for (let y = 0; y < D.GRID_H; y++) {
     for (let x = 0; x < D.GRID_W; x++) {
       const b = state.grid[idx(x, y)];
-      if (!b) continue;
+      if (!b || b === 'tree') continue;
       const cx = sx(x + 0.5), cy = sy(y + 0.5);
-      if (b === 'tree') continue;
-      if (b === 'wall' && walls) {
-        const w = walls[idx(x, y)];
-        if (!w) continue; // 부서진 돌담
-        emoji('🧱', cx, cy, cs * 0.78);
-        if (w.hp < w.maxHp) bar(cx, sy(y) + cs * 0.86, cs * 0.7, w.hp / w.maxHp, '#d9a066');
+      if (b === 'wall') {
+        const w = walls && walls[idx(x, y)];
+        if (walls && !w) { emoji('🪨', cx, cy, cs * 0.35, 0.6); continue; } // 부서진 돌담
+        drawWall(x, y, night, walls);
+        if (w && w.hp < w.maxHp) bar(cx, sy(y) + cs * 0.86, cs * 0.7, w.hp / w.maxHp, '#d9a066');
         continue;
       }
-      emoji(D.BUILDINGS[b].emoji, cx, cy, cs * 0.72, night && b !== 'tower' && b !== 'wall' ? 0.7 : 1);
+      emoji(D.BUILDINGS[b].emoji, cx, cy, cs * 0.72, night && b !== 'tower' ? 0.7 : 1);
     }
   }
 }
@@ -211,6 +240,18 @@ export function drawNight(N) {
   drawBuildings(true, N.walls);
   drawTree(N.tree.hp, N.tree.maxHp);
 
+  for (const t of N.towers) {
+    if (t.archer) emoji(D.RESIDENT.emoji.archer, sx(t.x + 0.25), sy(t.y + 0.22), cs * 0.4);
+    if (N.towerHaste > 0) emoji('✨', sx(t.x - 0.25), sy(t.y - 0.3), cs * 0.3);
+  }
+  if (N.treeInvuln > 0) {
+    ctx.strokeStyle = 'rgba(255,230,100,0.8)';
+    ctx.lineWidth = cs * 0.08;
+    ctx.beginPath();
+    ctx.arc(sx(D.TREE_POS.x + 0.5), sy(D.TREE_POS.y + 0.5), cs * 0.6, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
   for (const u of N.units) {
     const cx = sx(u.x), cy = sy(u.y);
     const e = u.general ? D.GENERALS[u.general.type].emoji : D.RESIDENT.emoji.guard;
@@ -227,7 +268,8 @@ export function drawNight(N) {
     const def = D.ENEMIES[e.type];
     const cx = sx(e.x) + e.jx * cs, cy = sy(e.y) + e.jy * cs;
     const bob = Math.sin(e.age * 8) * cs * 0.03;
-    emoji(def.emoji, cx, cy + bob, cs * def.size, 1, e.flash > 0);
+    emoji(def.emoji, cx, cy + (N.freeze > 0 ? 0 : bob), cs * def.size, 1, e.flash > 0);
+    if (N.freeze > 0) emoji('❄️', cx + cs * 0.25, cy - cs * 0.25, cs * 0.3);
     if (e.hp < e.maxHp && !def.boss) bar(cx, cy + cs * def.size * 0.5, cs * 0.6, e.hp / e.maxHp, '#ff5c5c');
   }
 

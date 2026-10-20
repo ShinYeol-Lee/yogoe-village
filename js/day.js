@@ -32,7 +32,8 @@ function renderInfo() {
   const list = view.wave.map(g => `<span class="pv">${D.DIRS[g.dir].arrow}${D.ENEMIES[g.type].emoji}×${g.count}</span>`).join('');
   let hint = '건물 버튼 → 칸을 탭해서 지어요 · 주민 탭 → 칸 탭으로 옮겨요';
   if (view.mode === 'build') hint = `${D.BUILDINGS[view.buildType].emoji} ${D.BUILDINGS[view.buildType].name}: 지을 칸을 탭하세요`;
-  if (view.mode === 'move') hint = '옮길 칸을 탭하세요 (논=농부, 벌목장=나무꾼, 빈 칸=수호대)';
+  if (view.mode === 'build' && apCost(view.buildType) === 0) hint += ' (연달아 지을 수 있어요)';
+  if (view.mode === 'move') hint = '옮길 칸을 탭하세요 (논=농부, 벌목장=나무꾼, 망루=궁수, 빈 칸=수호대)';
   setInfo(`<div class="preview ${boss ? 'boss' : ''}"><b>${boss ? '🐍 보스의 밤!' : '🌙 오늘 밤'}</b>${list}</div><div class="hint">${hint}</div>`);
 }
 
@@ -40,10 +41,10 @@ function renderPanel() {
   const s = state;
   const builds = D.BUILD_ORDER.map(k => {
     const b = D.BUILDINGS[k];
-    const ok = s.ap > 0 && canAfford(b.cost);
+    const ok = s.ap >= apCost(k) && canAfford(b.cost);
     const on = view.mode === 'build' && view.buildType === k;
     return `<button class="bld ${on ? 'on' : ''}" data-act="build:${k}" ${ok || on ? '' : 'disabled'}>
-      <span class="e">${b.emoji}</span><span class="n">${b.name}</span><span class="c">${costText(b.cost)}</span></button>`;
+      <span class="e">${b.emoji}</span><span class="n">${b.name}</span><span class="c">${costText(b.cost)}${apCost(k) ? '' : ' ⚡0'}</span></button>`;
   }).join('');
   const canHire = s.ap >= D.RESIDENT.hireAp && canAfford(D.RESIDENT.hireCost) && s.residents.length < maxResidents();
   const dbg = debug ? `<div class="row debug">
@@ -92,13 +93,14 @@ function computeValid() {
   return out;
 }
 
+const apCost = type => D.BUILDINGS[type].ap ?? D.BUILD_AP;
 const selected = () => state.residents.find(r => r.id === view.selectedId);
 
 function canMoveTo(r, x, y) {
   if (!r || residentAt(x, y)) return false;
   const b = buildingAt(x, y);
   if (!b) return true;
-  return !r.general && (b === 'field' || b === 'lumber');
+  return !r.general && (b === 'field' || b === 'lumber' || b === 'tower');
 }
 
 export function handleTap(cell) {
@@ -108,13 +110,14 @@ export function handleTap(cell) {
     const type = view.buildType;
     const b = D.BUILDINGS[type];
     if (buildingAt(x, y) || residentAt(x, y)) { toast('빈 칸에만 지을 수 있어요'); return; }
-    if (state.ap <= 0) { toast('행동력이 없어요'); return; }
+    if (state.ap < apCost(type)) { toast('행동력이 없어요'); return; }
     if (!canAfford(b.cost)) { toast('자원이 모자라요'); return; }
     pay(b.cost);
-    state.ap--;
+    state.ap -= apCost(type);
     state.grid[idx(x, y)] = type;
     toast(`${b.emoji} ${b.name} 완성!`);
-    clearMode();
+    // 행동력이 안 드는 건물(돌담)은 계속 이어서 짓기
+    if (apCost(type) > 0 || !canAfford(b.cost)) clearMode();
     save();
     refresh();
     return;
@@ -131,7 +134,7 @@ export function handleTap(cell) {
       return;
     }
     sel.x = x; sel.y = y;
-    const role = { guard: '🛡️ 수호대', farmer: '🌾 농부', lumber: '🪓 나무꾼' }[roleOf(sel)];
+    const role = { guard: '🛡️ 수호대', farmer: '🌾 농부', lumber: '🪓 나무꾼', archer: '🏹 궁수' }[roleOf(sel)];
     toast(sel.general ? `${D.GENERALS[sel.general.type].name} 이동` : `${role}가 되었어요`);
     clearMode();
     save();
