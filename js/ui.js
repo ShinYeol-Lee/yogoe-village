@@ -58,12 +58,14 @@ export function setInfo(html) {
   $('info').innerHTML = html;
 }
 
-export function showBanner(text, time) {
+let bannerTimer = 0;
+export function showBanner(text, time, kind = '') {
   const b = $('banner');
   b.textContent = text;
-  b.classList.remove('hidden');
+  b.className = kind;
   b.style.animation = 'none';
   void b.offsetWidth; // 애니메이션 재시작
   b.style.animation = '';
-  setTimeout(() => b.classList.add('hidden'), time * 1000);
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => b.classList.add('hidden'), time * 1000);
 }

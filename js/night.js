@@ -25,6 +25,7 @@ export function startNight(endCallback) {
     kills: 0, coins: 0, treeDamage: 0, fled: 0,
     tree: { hp: D.TREE.hp, maxHp: D.TREE.hp, cd: 0 },
     treeDamageMult: 1, speedMult: 1, tigerLeft: 0,
+    freeze: 0, towerHaste: 0, treeInvuln: 0, wallMax: {},
   };
 
   // 장군 능력 (패시브)
@@ -51,7 +52,7 @@ export function startNight(endCallback) {
       ({ hp: maxHp, damage, cooldown, range } = D.RESIDENT.guard);
     }
     if (state.hungry) maxHp = Math.round(maxHp * D.RESIDENT.hungryHpMult);
-    const u = { resId: r.id, general: r.general, x: r.x + 0.5, y: r.y + 0.5, hp: maxHp, maxHp, damage, cooldown, range, cd: 0, down: false, flash: 0, skillTimer: 0 };
+    const u = { resId: r.id, general: r.general, x: r.x + 0.5, y: r.y + 0.5, hp: maxHp, maxHp, damage, cooldown, range, cd: 0, down: false, flash: 0, skillTimer: 0, skillReady: !!r.general };
     if (r.general && r.general.type === 'bear') { // 곰 장군은 당산나무 앞을 지킨다
       u.x = TX + (bearSlot++ * 0.3); u.y = TY - 0.85;
     }
@@ -68,12 +69,16 @@ export function startNight(endCallback) {
       let hp = D.BUILDINGS.wall.hp;
       if (turtles.some(r => dist(r.x, r.y, x, y) <= D.GENERALS.turtle.radius)) hp *= D.GENERALS.turtle.wallHpMult;
       N.walls[idx(x, y)] = { hp, maxHp: hp };
+      N.wallMax[idx(x, y)] = hp;
     } else if (b === 'tower') {
       const T = D.BUILDINGS.tower;
       const buffed = hawks.some(r => dist(r.x, r.y, x, y) <= D.GENERALS.hawk.radius);
+      const archer = state.residents.some(r => r.x === x && r.y === y); // 망루 안 궁수
+      const A = D.RESIDENT.archer;
       N.towers.push({
-        x: x + 0.5, y: y + 0.5, damage: T.damage, cd: rand(0, 0.5),
-        range: T.range + (buffed ? D.GENERALS.hawk.rangeBonus : 0),
+        x: x + 0.5, y: y + 0.5, cd: rand(0, 0.5), archer,
+        damage: T.damage * (archer ? A.damageMult : 1),
+        range: T.range + (buffed ? D.GENERALS.hawk.rangeBonus : 0) + (archer ? A.rangeBonus : 0),
         cooldown: T.cooldown * (buffed ? D.GENERALS.hawk.cooldownMult : 1),
       });
     }
@@ -197,6 +202,7 @@ function damageUnit(u, amount) {
 }
 
 function damageTree(amount, big) {
+  if (N.treeInvuln > 0) { addText(TX, TY - 0.5, '막음!', '#ffe066', 0.3); return; }
   const dmg = amount * N.treeDamageMult;
   N.tree.hp -= dmg;
   N.treeDamage += dmg;
@@ -220,13 +226,16 @@ export function skip() {
   if (!N || N.done) return;
   let guard = 0;
   while (!N.done && guard++ < 100000) step(D.NIGHT.skipStep);
-  N.fx.length = 0; N.texts.length = 0; N.shake = 0; N.bossBanner = null;
+  N.fx.length = 0; N.texts.length = 0; N.shake = 0; N.bossBanner = null; N.skillBanner = null;
 }
 
 function step(dt) {
   N.t += dt;
   N.shake = Math.max(0, N.shake - D.FX.shakeDecay * dt);
   N.bossAlert = Math.max(0, N.bossAlert - dt);
+  N.freeze = Math.max(0, N.freeze - dt);
+  N.towerHaste = Math.max(0, N.towerHaste - dt);
+  N.treeInvuln = Math.max(0, N.treeInvuln - dt);
 
   while (N.spawnQueue.length && N.spawnQueue[0].time <= N.t) spawn(N.spawnQueue.shift());
 
@@ -241,6 +250,11 @@ function step(dt) {
   for (const t of N.texts) t.t += dt;
   N.fx = N.fx.filter(f => f.t < f.life);
   N.texts = N.texts.filter(t => t.t < t.life);
+
+  // 위급하면 남은 필살기 자동 발동
+  if (N.tree.hp < N.tree.maxHp * D.SKILL_AUTO_TREE_RATIO) {
+    for (const u of N.units) if (u.skillReady && !u.down) useSkill(u);
+  }
 
   // 끝 판정
   if (N.tree.hp <= 0) { N.tree.hp = 0; finish(false); return; }
@@ -290,6 +304,8 @@ function updateEnemy(e, dt) {
     damageEnemy(e, def.boss ? e.maxHp * D.GENERALS.tiger.bossDamageRatio : e.hp, '#ffcc33');
     if (e.hp <= 0) return;
   }
+
+  if (N.freeze > 0) return; // 부엉이 필살기: 얼어붙음
 
   // 당산나무 공격
   if (dist(e.x, e.y, TX, TY) <= D.NIGHT.treeReach * Math.max(1, def.size)) {
@@ -406,7 +422,7 @@ function updateTower(t, dt) {
   if (t.cd > 0) return;
   const target = nearestEnemy(t.x, t.y, t.range);
   if (!target) return;
-  t.cd = t.cooldown;
+  t.cd = t.cooldown * (N.towerHaste > 0 ? D.GENERALS.hawk.skill.cooldownMult : 1);
   N.projectiles.push({ x: t.x, y: t.y - 0.25, target, damage: t.damage });
 }
 
@@ -433,4 +449,53 @@ function updateProjectiles(dt) {
     }
   }
   N.projectiles = N.projectiles.filter(p => !p.dead);
+}
+
+// ---- 장군 필살기 (밤마다 1번) ----
+export function useSkill(u) {
+  if (!N || N.done || !u.skillReady || u.down) return false;
+  u.skillReady = false;
+  const G = D.GENERALS[u.general.type];
+  const S = G.skill;
+  const lv = u.general.level;
+  N.skillBanner = `${G.emoji} ${S.name}!`;
+  N.shake = Math.max(N.shake, D.FX.shakeBoss * 0.7);
+  addFx({ kind: 'emoji', emoji: G.emoji, x: u.x, y: u.y - 0.3, size: 1.6, t: 0, life: 0.8 });
+  switch (u.general.type) {
+    case 'turtle':
+      for (const [i, max] of Object.entries(N.wallMax)) {
+        N.walls[i] = { hp: max, maxHp: max };
+        burst(i % D.GRID_W + 0.5, Math.floor(i / D.GRID_W) + 0.5, '#c8b8a0', 0.5);
+      }
+      computeFields();
+      break;
+    case 'owl':
+      N.freeze = S.time;
+      for (const e of N.enemies) addFx({ kind: 'emoji', emoji: '❄️', x: e.x, y: e.y, size: 0.5, t: 0, life: 0.6 });
+      break;
+    case 'hawk':
+      N.towerHaste = S.time;
+      for (const t of N.towers) addFx({ kind: 'emoji', emoji: '🏹', x: t.x, y: t.y - 0.3, size: 0.6, t: 0, life: 0.8 });
+      break;
+    case 'boar': {
+      const dmg = S.damage + S.damagePerLevel * (lv - 1);
+      burst(u.x, u.y, '#e0b080', S.radius);
+      for (const e of N.enemies) if (dist(u.x, u.y, e.x, e.y) <= S.radius) damageEnemy(e, dmg, '#ffb74d');
+      break;
+    }
+    case 'bear':
+      N.tree.hp = Math.min(N.tree.maxHp, N.tree.hp + N.tree.maxHp * S.heal);
+      N.treeInvuln = S.time;
+      addText(TX, TY - 0.6, '+' + Math.round(N.tree.maxHp * S.heal), '#69f0ae', 0.5);
+      break;
+    case 'tiger': {
+      const dmg = S.damage + S.damagePerLevel * (lv - 1);
+      for (const e of N.enemies) {
+        addFx({ kind: 'line', x: e.x - 0.4, y: e.y - 0.4, x2: e.x + 0.4, y2: e.y + 0.4, color: '#ffcc33', t: 0, life: 0.35 });
+        damageEnemy(e, dmg, '#ffcc33');
+      }
+      break;
+    }
+  }
+  return true;
 }
