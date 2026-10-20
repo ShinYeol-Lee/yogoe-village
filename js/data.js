@@ -74,7 +74,7 @@ export const GENERAL = {
 
 // skill: 밤마다 1번 쓰는 필살기 (버튼, 안 누르면 위급할 때 자동 발동)
 export const GENERALS = {
-  turtle: { name: '거북 장군', emoji: '🐢', grade: 'common', desc: '근처 돌담 내구도 2배', radius: 2.5, wallHpMult: 2,
+  turtle: { name: '거북 장군', emoji: '🐢', grade: 'common', desc: '근처 돌담 내구도 2.5배', radius: 4, wallHpMult: 2.5,
     skill: { name: '철벽', desc: '모든 돌담 완전 수리 + 부서진 돌담 복구' } },
   owl:    { name: '부엉이 장군', emoji: '🦉', grade: 'common', desc: '밤 동안 요괴 이동 느려짐', slowMult: 0.75, slowPerLevel: 0.03,
     skill: { name: '얼어붙는 눈빛', desc: '모든 요괴 5초 동안 멈춤', time: 5 } },
@@ -89,11 +89,19 @@ export const GENERALS = {
 };
 export const SKILL_AUTO_TREE_RATIO = 0.35; // 당산나무 체력이 이 아래로 떨어지면 남은 필살기 자동 발동
 
+// 특수 능력: flying(날아서 곧장), phase(돌담 통과), ignoreGuards(수호대 무시),
+// wallDamageMult(돌담에 주는 피해 배수), split(쓰러지면 갈라짐), hidden(미리보기·소개에 안 나옴)
 export const ENEMIES = {
-  dokkaebi: { name: '도깨비', emoji: '👹', hp: 30, speed: 0.8, damage: 4, cooldown: 1.2, coin: 2, size: 0.8 },
-  egg:      { name: '달걀귀신', emoji: '🥚', hp: 14, speed: 1.5, damage: 3, cooldown: 0.9, coin: 1, size: 0.62 },
-  wisp:     { name: '도깨비불', emoji: '🔥', hp: 18, speed: 1.0, damage: 4, cooldown: 1.0, coin: 2, size: 0.7, flying: true },
-  imugi:    { name: '이무기', emoji: '🐍', hp: 1300, speed: 0.35, damage: 25, cooldown: 1.5, coin: 20, size: 1.6, boss: true },
+  dokkaebi:  { name: '도깨비', emoji: '👹', hp: 30, speed: 0.8, damage: 4, cooldown: 1.2, coin: 2, size: 0.8, desc: '기본 요괴. 돌담을 만나면 두들겨 부숴요' },
+  egg:       { name: '달걀귀신', emoji: '🥚', hp: 14, speed: 1.5, damage: 3, cooldown: 0.9, coin: 1, size: 0.62, desc: '빠르고 약해요' },
+  wisp:      { name: '도깨비불', emoji: '🔥', hp: 18, speed: 1.0, damage: 4, cooldown: 1.0, coin: 2, size: 0.7, flying: true, desc: '날아서 돌담을 넘어요. 망루로 잡아요' },
+  bat:       { name: '박쥐 떼', emoji: '🦇', hp: 8, speed: 1.4, damage: 2, cooldown: 0.8, coin: 1, size: 0.5, flying: true, desc: '약하지만 한꺼번에 우르르 날아와요' },
+  jangseung: { name: '장승 폭주', emoji: '🗿', hp: 90, speed: 0.5, damage: 8, cooldown: 1.4, coin: 4, size: 0.85, wallDamageMult: 6, desc: '느리지만 돌담을 순식간에 부숴요' },
+  gumiho:    { name: '구미호', emoji: '🦊', hp: 40, speed: 1.2, damage: 6, cooldown: 1.0, coin: 3, size: 0.75, ignoreGuards: true, desc: '수호대를 홀려서 그냥 지나쳐요. 망루·돌담으로 막아요' },
+  toad:      { name: '두꺼비 요괴', emoji: '🐸', hp: 45, speed: 0.7, damage: 5, cooldown: 1.2, coin: 2, size: 0.85, split: { type: 'toadlet', count: 3 }, desc: '쓰러지면 아기 두꺼비 3마리로 갈라져요' },
+  toadlet:   { name: '아기 두꺼비', emoji: '🐸', hp: 10, speed: 1.3, damage: 2, cooldown: 0.8, coin: 1, size: 0.45, hidden: true },
+  ghost:     { name: '처녀귀신', emoji: '👻', hp: 28, speed: 0.8, damage: 5, cooldown: 1.0, coin: 3, size: 0.72, phase: true, desc: '돌담을 스르륵 통과해요. 수호대는 붙잡을 수 있어요' },
+  imugi:     { name: '이무기', emoji: '🐍', hp: 1100, speed: 0.35, damage: 25, cooldown: 1.5, coin: 20, size: 1.6, boss: true, desc: '7일차 보스. 느리고 아주 단단해요' },
 };
 
 export const ENEMY_HP_PER_DAY = 0.2; // 날마다 요괴 체력 +20% (보스 제외)
@@ -104,15 +112,15 @@ export const DIRS = {
   right: { name: '오른쪽', arrow: '⬅️' },
 };
 
-// WAVES[일차-1] = 그날 밤 요괴 무리 목록. delay: 무리 등장 시작(초)
+// WAVES[일차-1] = 그날 밤 요괴 무리 목록. delay: 무리 등장 시작(초), gap: 무리 안 등장 간격(초, 없으면 자동)
 export const WAVES = [
   [{ type: 'dokkaebi', count: 4, dir: 'top' }],
-  [{ type: 'dokkaebi', count: 4, dir: 'top' }, { type: 'egg', count: 4, dir: 'left', delay: 3 }],
-  [{ type: 'dokkaebi', count: 6, dir: 'top' }, { type: 'egg', count: 4, dir: 'right', delay: 2 }, { type: 'wisp', count: 3, dir: 'top', delay: 5 }],
-  [{ type: 'dokkaebi', count: 7, dir: 'top' }, { type: 'egg', count: 6, dir: 'left', delay: 2 }, { type: 'wisp', count: 4, dir: 'right', delay: 5 }],
-  [{ type: 'dokkaebi', count: 6, dir: 'top' }, { type: 'dokkaebi', count: 5, dir: 'left', delay: 3 }, { type: 'egg', count: 7, dir: 'right', delay: 2 }, { type: 'wisp', count: 5, dir: 'top', delay: 6 }],
-  [{ type: 'dokkaebi', count: 8, dir: 'top' }, { type: 'dokkaebi', count: 5, dir: 'right', delay: 3 }, { type: 'egg', count: 8, dir: 'left', delay: 2 }, { type: 'wisp', count: 6, dir: 'top', delay: 6 }],
-  [{ type: 'imugi', count: 1, dir: 'top', delay: 2 }, { type: 'dokkaebi', count: 7, dir: 'left', delay: 4 }, { type: 'egg', count: 7, dir: 'right', delay: 6 }, { type: 'wisp', count: 6, dir: 'top', delay: 8 }],
+  [{ type: 'dokkaebi', count: 4, dir: 'top' }, { type: 'egg', count: 5, dir: 'left', delay: 3 }],
+  [{ type: 'dokkaebi', count: 5, dir: 'top' }, { type: 'wisp', count: 3, dir: 'right', delay: 3 }, { type: 'bat', count: 8, dir: 'top', delay: 6, gap: 0.25 }],
+  [{ type: 'jangseung', count: 2, dir: 'top' }, { type: 'dokkaebi', count: 5, dir: 'top', delay: 2 }, { type: 'egg', count: 5, dir: 'left', delay: 3 }, { type: 'wisp', count: 4, dir: 'right', delay: 6 }],
+  [{ type: 'gumiho', count: 4, dir: 'top', delay: 1 }, { type: 'dokkaebi', count: 5, dir: 'left' }, { type: 'toad', count: 3, dir: 'right', delay: 3 }, { type: 'bat', count: 10, dir: 'top', delay: 7, gap: 0.25 }],
+  [{ type: 'ghost', count: 5, dir: 'top' }, { type: 'jangseung', count: 3, dir: 'left', delay: 2 }, { type: 'gumiho', count: 4, dir: 'right', delay: 4 }, { type: 'toad', count: 3, dir: 'top', delay: 6 }, { type: 'bat', count: 10, dir: 'top', delay: 8, gap: 0.25 }],
+  [{ type: 'imugi', count: 1, dir: 'top', delay: 2 }, { type: 'jangseung', count: 3, dir: 'top', delay: 4 }, { type: 'ghost', count: 3, dir: 'left', delay: 5 }, { type: 'gumiho', count: 3, dir: 'right', delay: 6 }, { type: 'bat', count: 8, dir: 'top', delay: 8, gap: 0.25 }],
 ];
 
 export const NIGHT = {

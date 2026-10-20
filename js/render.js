@@ -268,7 +268,7 @@ export function drawNight(N) {
     const def = D.ENEMIES[e.type];
     const cx = sx(e.x) + e.jx * cs, cy = sy(e.y) + e.jy * cs;
     const bob = Math.sin(e.age * 8) * cs * 0.03;
-    emoji(def.emoji, cx, cy + (N.freeze > 0 ? 0 : bob), cs * def.size, 1, e.flash > 0);
+    emoji(def.emoji, cx, cy + (N.freeze > 0 ? 0 : bob), cs * def.size, def.phase ? 0.65 : 1, e.flash > 0);
     if (N.freeze > 0) emoji('❄️', cx + cs * 0.25, cy - cs * 0.25, cs * 0.3);
     if (e.hp < e.maxHp && !def.boss) bar(cx, cy + cs * def.size * 0.5, cs * 0.6, e.hp / e.maxHp, '#ff5c5c');
   }
