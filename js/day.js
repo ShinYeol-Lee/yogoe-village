@@ -4,7 +4,7 @@ import {
   state, idx, inGrid, buildingAt, residentAt, roleOf, maxResidents,
   canAfford, pay, costText, addResident, save, gain, generalCount,
 } from './state.js';
-import { updateHud, toast, setPanel, setInfo } from './ui.js';
+import { updateHud, toast, setPanel, setInfo, showCard, hideCard } from './ui.js';
 import { promote } from './morning.js';
 
 export const view = { mode: null, selectedId: null, validCells: null, wave: null };
@@ -18,6 +18,24 @@ export function enterDay(h) {
   view.validCells = null;
   view.wave = D.WAVES[Math.min(state.day, D.WAVES.length) - 1];
   refresh();
+  introduceNewEnemies();
+}
+
+// 처음 보는 요괴가 오는 날은 소개 카드를 보여준다
+function introduceNewEnemies() {
+  state.seenEnemies = state.seenEnemies || [];
+  const fresh = [...new Set(view.wave.map(g => g.type))]
+    .filter(t => !state.seenEnemies.includes(t) && !D.ENEMIES[t].hidden);
+  if (!fresh.length) return;
+  state.seenEnemies.push(...fresh);
+  save();
+  const list = fresh.map(t => {
+    const e = D.ENEMIES[t];
+    return `<li><span class="ne-emoji">${e.emoji}</span><div><b>${e.name}</b><br><small>${e.desc}</small></div></li>`;
+  }).join('');
+  showCard(`<h2>👀 새로운 요괴!</h2><p class="sub">오늘 밤 처음 보는 요괴가 와요</p>
+    <ul class="newenemy">${list}</ul>
+    <button data-act="ok" class="big">대비하자!</button>`, { ok: hideCard });
 }
 
 function refresh() {

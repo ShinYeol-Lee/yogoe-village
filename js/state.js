@@ -26,6 +26,7 @@ export function newGame() {
     nextId: 1,
     totalKills: 0,
     hungry: false,
+    seenEnemies: [],
   };
   for (const r of D.START.residents) addResident(r.x, r.y);
   snapshots = {};

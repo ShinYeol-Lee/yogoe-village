@@ -25,7 +25,7 @@ export function startNight(endCallback) {
     kills: 0, coins: 0, treeDamage: 0, fled: 0,
     tree: { hp: D.TREE.hp, maxHp: D.TREE.hp, cd: 0 },
     treeDamageMult: 1, speedMult: 1, tigerLeft: 0,
-    freeze: 0, towerHaste: 0, treeInvuln: 0, wallMax: {},
+    freeze: 0, towerHaste: 0, treeInvuln: 0, wallMax: {}, pending: [],
   };
 
   // 장군 능력 (패시브)
@@ -87,7 +87,7 @@ export function startNight(endCallback) {
 
   // 등장 순서
   for (const g of wave) {
-    const gap = Math.min(D.NIGHT.maxSpawnGap, D.NIGHT.spawnWindow / g.count);
+    const gap = g.gap ?? Math.min(D.NIGHT.maxSpawnGap, D.NIGHT.spawnWindow / g.count);
     for (let i = 0; i < g.count; i++) N.spawnQueue.push({ time: (g.delay || 0) + i * gap + rand(0, 0.3), type: g.type, dir: g.dir });
   }
   N.spawnQueue.sort((a, b) => a.time - b.time);
@@ -120,7 +120,7 @@ function bfs(wallsBlock) {
 
 function nextCell(e) {
   const c = idx(e.cx, e.cy);
-  const field = N.dist1[c] < INF ? N.dist1 : N.dist2;
+  const field = !D.ENEMIES[e.type].phase && N.dist1[c] < INF ? N.dist1 : N.dist2;
   const options = [];
   for (const [nx, ny] of [[e.cx + 1, e.cy], [e.cx - 1, e.cy], [e.cx, e.cy + 1], [e.cx, e.cy - 1]]) {
     if (!inGrid(nx, ny)) continue;
@@ -142,13 +142,8 @@ function spawn(item) {
     cx = item.dir === 'left' ? 0 : D.GRID_W - 1;
     x = item.dir === 'left' ? -0.5 : D.GRID_W + 0.5; y = cy + 0.5;
   }
-  const hp = def.boss ? def.hp : Math.round(def.hp * (1 + D.ENEMY_HP_PER_DAY * (state.day - 1)));
-  const e = {
-    type: item.type, x, y, cx, cy, hp, maxHp: hp, cd: 0, age: 0, flash: 0,
-    jx: def.boss ? 0 : rand(-0.12, 0.12), jy: def.boss ? 0 : rand(-0.12, 0.12),
-    engaged: null, wallTarget: -1, tiger: false,
-  };
-  if (!def.flying && N.walls[idx(cx, cy)]) e.wallTarget = idx(cx, cy); // 입구가 돌담이면 바로 부수기 시작
+  const e = makeEnemy(item.type, x, y, cx, cy);
+  if (!def.flying && !def.phase && N.walls[idx(cx, cy)]) e.wallTarget = idx(cx, cy); // 입구가 돌담이면 바로 부수기 시작
   if (N.tigerLeft > 0) { N.tigerLeft--; e.tiger = true; }
   N.enemies.push(e);
   if (def.boss) {
@@ -157,6 +152,16 @@ function spawn(item) {
     N.bossBanner = `⚠️ ${def.name} 출현! ⚠️`;
     N.boss = e;
   }
+}
+
+function makeEnemy(type, x, y, cx, cy) {
+  const def = D.ENEMIES[type];
+  const hp = def.boss ? def.hp : Math.round(def.hp * (1 + D.ENEMY_HP_PER_DAY * (state.day - 1)));
+  return {
+    type, x, y, cx, cy, hp, maxHp: hp, cd: 0, age: 0, flash: 0,
+    jx: def.boss ? 0 : rand(-0.12, 0.12), jy: def.boss ? 0 : rand(-0.12, 0.12),
+    engaged: null, wallTarget: -1, tiger: false,
+  };
 }
 
 // ---- 이펙트 ----
@@ -189,6 +194,13 @@ function killEnemy(e) {
   addFx({ kind: 'emoji', emoji: '💥', x: e.x + e.jx, y: e.y + e.jy, size: def.boss ? 1.5 : 0.6, t: 0, life: 0.4 });
   addText(e.x + e.jx, e.y + e.jy - 0.5, def.boss ? '펑!!!' : '펑!', '#ffe066', def.boss ? 0.6 : 0.3);
   if (def.boss) N.shake = D.FX.shakeBoss;
+  if (def.split) { // 두꺼비: 작은 요괴로 갈라짐 (이번 스텝이 끝난 뒤 등장)
+    for (let i = 0; i < def.split.count; i++) {
+      const c = makeEnemy(def.split.type, e.x + rand(-0.3, 0.3), e.y + rand(-0.3, 0.3), e.cx, e.cy);
+      c.wallTarget = e.wallTarget;
+      N.pending.push(c);
+    }
+  }
 }
 
 function damageUnit(u, amount) {
@@ -245,6 +257,7 @@ function step(dt) {
   updateTree(dt);
   updateProjectiles(dt);
   N.enemies = N.enemies.filter(e => e.hp > 0);
+  if (N.pending.length) { N.enemies.push(...N.pending); N.pending.length = 0; }
 
   for (const f of N.fx) f.t += dt;
   for (const t of N.texts) t.t += dt;
@@ -259,7 +272,7 @@ function step(dt) {
   // 끝 판정
   if (N.tree.hp <= 0) { N.tree.hp = 0; finish(false); return; }
   if (N.endTimer < 0) {
-    if (!N.spawnQueue.length && !N.enemies.length) N.endTimer = D.NIGHT.endDelay;
+    if (!N.spawnQueue.length && !N.enemies.length && !N.pending.length) N.endTimer = D.NIGHT.endDelay;
     else if (N.t >= D.NIGHT.maxDuration) { // 동이 트면 남은 요괴는 도망
       N.fled = N.enemies.length + N.spawnQueue.length;
       N.enemies = []; N.spawnQueue = [];
@@ -314,7 +327,7 @@ function updateEnemy(e, dt) {
   }
 
   // 수호대에 붙잡힘 (날아다니는 요괴 제외)
-  if (!def.flying) {
+  if (!def.flying && !def.ignoreGuards) {
     if (e.engaged && (e.engaged.down || dist(e.x, e.y, e.engaged.x, e.engaged.y) > D.NIGHT.engageDist * Math.max(1, def.size) + 0.2)) e.engaged = null;
     if (!e.engaged) {
       for (const u of N.units) {
@@ -344,9 +357,11 @@ function updateEnemy(e, dt) {
     if (!w) { e.wallTarget = -1; return; }
     if (e.cd <= 0) {
       e.cd = def.cooldown;
-      w.hp -= def.damage;
+      const wd = def.damage * (def.wallDamageMult || 1);
+      w.hp -= wd;
       const wx = e.wallTarget % D.GRID_W + 0.5, wy = Math.floor(e.wallTarget / D.GRID_W) + 0.5;
-      addText(wx, wy - 0.3, String(def.damage), '#ffcc80', 0.24);
+      addText(wx, wy - 0.3, String(wd), '#ffcc80', def.wallDamageMult ? 0.34 : 0.24);
+      if (def.wallDamageMult) N.shake = Math.max(N.shake, D.FX.shakeBigHit * 0.6);
       if (w.hp <= 0) {
         delete N.walls[e.wallTarget];
         burst(wx, wy, '#b0a090', 0.6);
@@ -368,7 +383,7 @@ function updateEnemy(e, dt) {
   const n = nextCell(e);
   if (!n) return;
   const ni = idx(n[0], n[1]);
-  if (N.walls[ni]) { e.wallTarget = ni; return; }
+  if (N.walls[ni] && !def.phase) { e.wallTarget = ni; return; }
   e.cx = n[0]; e.cy = n[1];
 }
 
